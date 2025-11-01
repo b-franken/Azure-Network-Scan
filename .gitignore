@@ -1,0 +1,9 @@
+audit-config.json
+
+*.log
+*.tmp
+
+AuditReports/
+
+.DS_Store
+Thumbs.db

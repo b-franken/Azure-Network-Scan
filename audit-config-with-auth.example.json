@@ -1,0 +1,40 @@
+{
+  "Authentication": {
+    "ClientId": "12345678-1234-1234-1234-123456789abc",
+    "TenantId": "87654321-4321-4321-4321-cba987654321",
+    "ClientSecret": "your-client-secret-here-NOT-RECOMMENDED-use-env-var-instead",
+    "AuthMethod": "AppRegistration"
+  },
+  "Logging": {
+    "LogLevel": "Debug",
+    "LogToFile": true,
+    "LogToConsole": true
+  },
+  "DataCollection": {
+    "ResourceGraphPageSize": 5000,
+    "MaxRetries": 5,
+    "BaseDelaySeconds": 2
+  },
+  "Analysis": {
+    "MaxConcurrentQueries": 10,
+    "ParallelProcessingThreshold": 100
+  },
+  "Reporting": {
+    "OutputPath": "C:\\AzureAudits",
+    "SkipHTMLReport": false,
+    "Visualization": {
+      "EnableNetworkGraphs": true,
+      "Formats": ["JSON", "DOT", "SVG", "PNG", "HTML", "Mermaid"],
+      "GraphvizPath": "C:\\Program Files\\Graphviz\\bin\\dot.exe",
+      "HighlightIssues": true,
+      "ColorScheme": "Azure",
+      "GroupBySubscription": true
+    }
+  },
+  "Subscriptions": {
+    "SubscriptionIds": [
+      "sub-id-1",
+      "sub-id-2"
+    ]
+  }
+}
