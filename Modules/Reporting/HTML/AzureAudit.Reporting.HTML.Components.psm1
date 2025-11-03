@@ -202,6 +202,83 @@ function Get-DashboardCSS {
         .search-box {
             margin-bottom: 20px;
         }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .action-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .action-btn:hover {
+            background: #2980b9;
+        }
+        .action-btn.secondary {
+            background: #95a5a6;
+        }
+        .action-btn.secondary:hover {
+            background: #7f8c8d;
+        }
+        .subscription-header {
+            background: #e8f4f8 !important;
+            font-weight: 600;
+        }
+        .subscription-header td {
+            padding: 15px 12px !important;
+            color: #2c3e50;
+            border-top: 2px solid #3498db;
+        }
+        .cost-chart {
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .cost-chart h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .cost-bar {
+            position: relative;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .cost-label {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .cost-value {
+            font-size: 18px;
+            color: #e74c3c;
+            font-weight: 700;
+        }
+        .cost-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%);
+            border-radius: 5px;
+            opacity: 0.2;
+            z-index: 0;
+        }
+        .cost-bar > * {
+            position: relative;
+            z-index: 1;
+        }
         .search-box input {
             width: 100%;
             padding: 12px;

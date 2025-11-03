@@ -1245,6 +1245,219 @@ function Test-PrivateEndpoints {
             }
         }
     }
+
+    Test-PrivateEndpointDNSMetadata -PrivateEndpoints $PrivateEndpoints -PrivateDNSZones $AuditResults.PrivateDNSZones -AuditResults $AuditResults
+}
+
+function Test-PrivateEndpointDNSMetadata {
+    <#
+    .SYNOPSIS
+    Validates Private Endpoint DNS configuration using Azure metadata only.
+
+    .DESCRIPTION
+    Performs deep validation of Private Endpoint DNS configurations without requiring
+    network connectivity. Checks FQDN patterns, DNS zone existence, IP address validity,
+    and connection approval status. Detects misconfigurations that would cause DNS
+    resolution failures in production.
+
+    .PARAMETER PrivateEndpoints
+    Array of Private Endpoint objects with customDnsConfigs, groupIds, and connection state
+
+    .PARAMETER PrivateDNSZones
+    Array of Private DNS Zone objects to validate zone existence
+
+    .PARAMETER AuditResults
+    Hashtable to store identified issues
+
+    .EXAMPLE
+    Test-PrivateEndpointDNSMetadata -PrivateEndpoints $pes -PrivateDNSZones $zones -AuditResults $results
+
+    .NOTES
+    Validates FQDN format, zone existence, IP allocation, and pending approvals
+    Critical severity for DNS misconfigurations that prevent connectivity
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [array]$PrivateEndpoints,
+
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [array]$PrivateDNSZones,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$AuditResults
+    )
+
+    Write-AuditLog "Performing enhanced Private Endpoint DNS validation..." -Type Progress
+
+    foreach ($pe in $PrivateEndpoints) {
+        if ($pe.customDnsConfigs) {
+            foreach ($dnsConfig in $pe.customDnsConfigs) {
+                $fqdn = $dnsConfig.fqdn
+                $ipAddresses = $dnsConfig.ipAddresses
+
+                if ($pe.groupIds -and $pe.groupIds.Count -gt 0) {
+                    $groupId = $pe.groupIds[0]
+                    $expectedPattern = switch ($groupId) {
+                        "blob" { ".*\.privatelink\.blob\.core\.windows\.net$" }
+                        "file" { ".*\.privatelink\.file\.core\.windows\.net$" }
+                        "queue" { ".*\.privatelink\.queue\.core\.windows\.net$" }
+                        "table" { ".*\.privatelink\.table\.core\.windows\.net$" }
+                        "web" { ".*\.privatelink\.web\.core\.windows\.net$" }
+                        "dfs" { ".*\.privatelink\.dfs\.core\.windows\.net$" }
+                        "sqlServer" { ".*\.privatelink\.database\.windows\.net$" }
+                        "Sql" { ".*\.privatelink\.documents\.azure\.com$" }
+                        "MongoDB" { ".*\.privatelink\.mongo\.cosmos\.azure\.com$" }
+                        "postgresqlServer" { ".*\.privatelink\.postgres\.database\.azure\.com$" }
+                        "mysqlServer" { ".*\.privatelink\.mysql\.database\.azure\.com$" }
+                        "mariadbServer" { ".*\.privatelink\.mariadb\.database\.azure\.com$" }
+                        "registry" { ".*\.privatelink\.azurecr\.io$" }
+                        "sites" { ".*\.privatelink\.azurewebsites\.net$" }
+                        "staticSites" { ".*\.privatelink\.azurestaticapps\.net$" }
+                        "vault" { ".*\.privatelink\.vaultcore\.azure\.net$" }
+                        "namespace" { ".*\.privatelink\.servicebus\.windows\.net$" }
+                        default { $null }
+                    }
+
+                    if ($expectedPattern -and $fqdn -notmatch $expectedPattern) {
+                        Add-AuditIssue -Severity "Critical" -Category "Private Endpoint" `
+                            -Title "Private Endpoint DNS FQDN mismatch" `
+                            -Description "Private Endpoint '$($pe.name)' has FQDN '$fqdn' that doesn't match expected pattern for groupId '$groupId'" `
+                            -ResourceName $pe.name -ResourceType "Private Endpoint" `
+                            -SubscriptionId $pe.subscriptionId `
+                            -Remediation "Recreate Private Endpoint with correct DNS integration or verify groupId configuration" `
+                            -AuditResults $AuditResults
+                    }
+                }
+
+                if ($fqdn) {
+                    $zoneName = ($fqdn -split '\.',2)[1]
+                    $zone = $PrivateDNSZones | Where-Object { $_.name -eq $zoneName }
+
+                    if (!$zone) {
+                        Add-AuditIssue -Severity "Critical" -Category "Private Endpoint" `
+                            -Title "Private Endpoint references non-existent DNS zone" `
+                            -Description "Private Endpoint '$($pe.name)' is configured for DNS zone '$zoneName' but this zone doesn't exist in the audit scope" `
+                            -ResourceName $pe.name -ResourceType "Private Endpoint" `
+                            -SubscriptionId $pe.subscriptionId `
+                            -Remediation "Create Private DNS Zone '$zoneName' or verify zone exists in correct subscription/resource group" `
+                            -AuditResults $AuditResults
+                    }
+                }
+
+                if ($pe.subnetId -and $ipAddresses) {
+                    $vnetId = ($pe.subnetId -split '/subnets/')[0]
+                    $vnet = $AuditResults.VNets | Where-Object { $_.id -eq $vnetId }
+
+                    if ($vnet) {
+                        $peIP = $ipAddresses[0]
+                        $inAddressSpace = $false
+
+                        foreach ($addressSpace in $vnet.addressSpace) {
+                            if (Test-IPInCIDR -IP $peIP -CIDR $addressSpace) {
+                                $inAddressSpace = $true
+                                break
+                            }
+                        }
+
+                        if (!$inAddressSpace) {
+                            Add-AuditIssue -Severity "Critical" -Category "Private Endpoint" `
+                                -Title "Private Endpoint IP outside VNet address space" `
+                                -Description "Private Endpoint '$($pe.name)' has IP $peIP which is outside VNet address space: $($vnet.addressSpace -join ', ')" `
+                                -ResourceName $pe.name -ResourceType "Private Endpoint" `
+                                -SubscriptionId $pe.subscriptionId `
+                                -Remediation "This indicates a serious misconfiguration. Recreate the Private Endpoint in the correct subnet." `
+                                -AuditResults $AuditResults
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($pe.connectionState -eq "Pending") {
+            if ($pe.PSObject.Properties['timeCreated'] -and $pe.timeCreated) {
+                try {
+                    $resourceCreationTime = [datetime]$pe.timeCreated
+                    $ageInDays = ((Get-Date) - $resourceCreationTime).TotalDays
+
+                    if ($ageInDays -gt 7) {
+                        Add-AuditIssue -Severity "Medium" -Category "Private Endpoint" `
+                            -Title "Private Endpoint approval pending for $([Math]::Round($ageInDays)) days" `
+                            -Description "Private Endpoint '$($pe.name)' has been waiting for approval since $($resourceCreationTime.ToString('yyyy-MM-dd'))" `
+                            -ResourceName $pe.name -ResourceType "Private Endpoint" `
+                            -SubscriptionId $pe.subscriptionId `
+                            -Remediation "Contact resource owner to approve connection, or delete if no longer needed" `
+                            -AuditResults $AuditResults
+                    }
+                }
+                catch {
+                    Write-AuditLog "Could not parse timeCreated for Private Endpoint $($pe.name): $($_.Exception.Message)" -Type Debug
+                }
+            }
+        }
+    }
+}
+
+function Test-IPInCIDR {
+    <#
+    .SYNOPSIS
+    Tests if an IP address falls within a CIDR range.
+
+    .DESCRIPTION
+    Validates whether a given IP address is contained within the specified
+    CIDR network range using bitwise operations.
+
+    .PARAMETER IP
+    IP address to test (e.g., "10.0.1.50")
+
+    .PARAMETER CIDR
+    CIDR range to test against (e.g., "10.0.0.0/16")
+
+    .EXAMPLE
+    Test-IPInCIDR -IP "10.0.1.50" -CIDR "10.0.0.0/16"
+    Returns $true
+
+    .EXAMPLE
+    Test-IPInCIDR -IP "192.168.1.1" -CIDR "10.0.0.0/16"
+    Returns $false
+
+    .OUTPUTS
+    System.Boolean
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$IP,
+
+        [Parameter(Mandatory = $true)]
+        [string]$CIDR
+    )
+
+    try {
+        if ($IP -match ':' -or $CIDR -match ':') {
+            return $false
+        }
+
+        $network, $mask = $CIDR -split '/'
+        $ipBytes = [System.Net.IPAddress]::Parse($IP).GetAddressBytes()
+        $netBytes = [System.Net.IPAddress]::Parse($network).GetAddressBytes()
+        [Array]::Reverse($ipBytes)
+        [Array]::Reverse($netBytes)
+
+        $ipInt = [System.BitConverter]::ToUInt32($ipBytes, 0)
+        $netInt = [System.BitConverter]::ToUInt32($netBytes, 0)
+
+        $maskInt = [uint32]::MaxValue -shl (32 - [int]$mask)
+
+        return (($ipInt -band $maskInt) -eq ($netInt -band $maskInt))
+    }
+    catch {
+        Write-AuditLog "Failed to test IP $IP in CIDR $CIDR : $($_.Exception.Message)" -Type Debug
+        return $false
+    }
 }
 
 function Test-SubnetUtilization {
@@ -1388,8 +1601,25 @@ function Test-NetworkSecurityGroups {
     $orphanedNSGs = 0
     $wildcardRuleCount = 0
     $criticalWildcardRules = 0
+    $totalRiskScore = 0
 
     foreach ($nsg in $NSGs) {
+        $nsgRiskAnalysis = Get-NSGRiskScore -NSG $nsg
+        $totalRiskScore += $nsgRiskAnalysis.TotalScore
+
+        if ($nsgRiskAnalysis.RiskLevel -in @("Critical", "High")) {
+            $recommendationsText = $nsgRiskAnalysis.RecommendedActions -join "; "
+            $criticalRulesText = ($nsgRiskAnalysis.CriticalRules | ForEach-Object { "$($_.RuleName) (risk: $($_.Risk))" }) -join ", "
+
+            Add-AuditIssue -Severity $nsgRiskAnalysis.RiskLevel -Category "NSG Security" `
+                -Title "NSG has elevated risk score: $($nsgRiskAnalysis.TotalScore) ($($nsgRiskAnalysis.RiskLevel))" `
+                -Description "NSG '$($nsg.name)' has a risk score of $($nsgRiskAnalysis.TotalScore) with $($nsgRiskAnalysis.CriticalRules.Count) high-risk rules: $criticalRulesText. Recommendations: $recommendationsText" `
+                -ResourceName $nsg.name -ResourceType "Network Security Group" `
+                -SubscriptionId $nsg.subscriptionId `
+                -Remediation "Review and apply recommendations: $recommendationsText" `
+                -AuditResults $AuditResults
+        }
+
         $hasAttachment = ($nsg.subnets -and $nsg.subnets.Count -gt 0) -or ($nsg.networkInterfaces -and $nsg.networkInterfaces.Count -gt 0)
 
         if (!$hasAttachment) {
@@ -1527,6 +1757,211 @@ function Test-NetworkSecurityGroups {
     if ($wildcardRuleCount -gt 0) {
         Write-AuditLog "Found $wildcardRuleCount NSG rules with wildcard configurations ($criticalWildcardRules critical)" -Type Warning
     }
+
+    if ($totalRiskScore -gt 0) {
+        Write-AuditLog "Total NSG risk score across all NSGs: $totalRiskScore" -Type Info
+    }
+}
+
+function Get-NSGRiskScore {
+    <#
+    .SYNOPSIS
+    Calculates comprehensive risk score for a Network Security Group.
+
+    .DESCRIPTION
+    Analyzes NSG rules and calculates a quantitative risk score based on multiple factors:
+    source address exposure, protocol wildcards, port sensitivity, and rule priority.
+    Provides actionable recommendations for risk mitigation.
+
+    .PARAMETER NSG
+    Network Security Group object with securityRules property
+
+    .EXAMPLE
+    $riskAnalysis = Get-NSGRiskScore -NSG $nsg
+    Write-Host "Risk Level: $($riskAnalysis.RiskLevel), Score: $($riskAnalysis.TotalScore)"
+
+    .OUTPUTS
+    Hashtable with properties: TotalScore, RiskLevel, CriticalRules, RecommendedActions
+
+    .NOTES
+    Risk scoring system:
+    - Internet source: +50 points
+    - Broad CIDR (/8-/0): +30 points
+    - Any protocol: +20 points
+    - All ports: +20 points
+    - Sensitive ports (22, 3389, 1433, etc): +30 points
+    - High priority (<200): +10 points
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$NSG
+    )
+
+    $riskScore = 0
+    $criticalRules = @()
+
+    if (!$NSG.securityRules) {
+        return @{
+            TotalScore = 0
+            RiskLevel = "Low"
+            CriticalRules = @()
+            RecommendedActions = @()
+        }
+    }
+
+    foreach ($rule in $NSG.securityRules) {
+        $ruleProps = $rule.properties
+        if (!$ruleProps) {
+            continue
+        }
+
+        if ($ruleProps.direction -eq "Inbound" -and $ruleProps.access -eq "Allow") {
+            $ruleRisk = 0
+            $riskReasons = @()
+
+            $sourceAddressPrefix = $ruleProps.sourceAddressPrefix
+            $sourceAddressPrefixes = $ruleProps.sourceAddressPrefixes
+            $allSources = @($sourceAddressPrefix) + $sourceAddressPrefixes | Where-Object { $_ }
+
+            foreach ($source in $allSources) {
+                if ($source -in @('*', 'Internet', '0.0.0.0/0', '::/0')) {
+                    $ruleRisk += 50
+                    $riskReasons += "Internet/Any source (+50)"
+                    break
+                }
+                elseif ($source -match '/(0|8|16)$') {
+                    $ruleRisk += 30
+                    $riskReasons += "Very broad CIDR range (+30)"
+                    break
+                }
+            }
+
+            if ($ruleProps.protocol -eq '*') {
+                $ruleRisk += 20
+                $riskReasons += "Any protocol (+20)"
+            }
+
+            $destinationPortRange = $ruleProps.destinationPortRange
+            $destinationPortRanges = $ruleProps.destinationPortRanges
+            $allDestPorts = @($destinationPortRange) + $destinationPortRanges | Where-Object { $_ }
+
+            foreach ($port in $allDestPorts) {
+                if ($port -eq '*') {
+                    $ruleRisk += 20
+                    $riskReasons += "All ports (+20)"
+                    break
+                }
+                elseif ($port -in @('22', '3389', '1433', '3306', '5432', '5984', '27017')) {
+                    $ruleRisk += 30
+                    $riskReasons += "Sensitive management/database port ($port) (+30)"
+                    break
+                }
+            }
+
+            if ($ruleProps.priority -lt 200) {
+                $ruleRisk += 10
+                $riskReasons += "High priority rule (<200) (+10)"
+            }
+
+            $riskScore += $ruleRisk
+
+            if ($ruleRisk -ge 70) {
+                $criticalRules += @{
+                    RuleName = $rule.name
+                    Risk = $ruleRisk
+                    Reason = $riskReasons -join ", "
+                }
+            }
+        }
+    }
+
+    $riskLevel = if ($riskScore -gt 100) { "Critical" }
+                 elseif ($riskScore -gt 50) { "High" }
+                 elseif ($riskScore -gt 20) { "Medium" }
+                 else { "Low" }
+
+    $recommendations = Get-NSGRecommendations -NSG $NSG -RiskScore $riskScore
+
+    return @{
+        TotalScore = $riskScore
+        RiskLevel = $riskLevel
+        CriticalRules = $criticalRules
+        RecommendedActions = $recommendations
+    }
+}
+
+function Get-NSGRecommendations {
+    <#
+    .SYNOPSIS
+    Generates actionable security recommendations for an NSG based on risk score.
+
+    .DESCRIPTION
+    Analyzes NSG configuration and risk score to provide specific, actionable
+    recommendations for improving security posture.
+
+    .PARAMETER NSG
+    Network Security Group object
+
+    .PARAMETER RiskScore
+    Calculated risk score from Get-NSGRiskScore
+
+    .OUTPUTS
+    Array of recommendation strings
+
+    .NOTES
+    Recommendations are prioritized based on risk score thresholds
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$NSG,
+
+        [Parameter(Mandatory = $true)]
+        [int]$RiskScore
+    )
+
+    $recommendations = @()
+
+    if ($RiskScore -gt 100) {
+        $recommendations += "URGENT: This NSG allows Internet access on critical ports. Review immediately."
+        $recommendations += "Consider: Use Azure Firewall or Application Gateway for controlled Internet access"
+    }
+
+    if ($RiskScore -gt 50) {
+        $recommendations += "Implement Just-In-Time (JIT) VM access for management ports (22, 3389)"
+        $recommendations += "Replace '*' protocol rules with specific protocols (TCP/UDP)"
+        $recommendations += "Restrict source addresses to specific IPs or Azure Service Tags"
+    }
+
+    if (!$NSG.securityRules) {
+        return $recommendations
+    }
+
+    $hasDefaultDeny = $NSG.securityRules | Where-Object {
+        $_.properties -and
+        $_.properties.direction -eq "Inbound" -and
+        $_.properties.access -eq "Deny" -and
+        $_.properties.priority -gt 4000
+    }
+
+    if (!$hasDefaultDeny) {
+        $recommendations += "Add explicit Deny All rule at priority 4096 for defense-in-depth"
+    }
+
+    $hasServiceTags = $NSG.securityRules | Where-Object {
+        $_.properties -and
+        ($_.properties.sourceAddressPrefix -in @('Internet', 'VirtualNetwork', 'AzureLoadBalancer') -or
+         $_.properties.destinationAddressPrefix -in @('Internet', 'VirtualNetwork', 'AzureLoadBalancer'))
+    }
+
+    if (!$hasServiceTags -and $RiskScore -gt 20) {
+        $recommendations += "Use Azure Service Tags (e.g., AzureCloud, Storage, Sql) instead of IP ranges where possible"
+    }
+
+    return $recommendations
 }
 
 function Test-RouteTables {
@@ -1600,4 +2035,4 @@ function Test-RouteTables {
     }
 }
 
-Export-ModuleMember -Function Test-IPAddressOverlap, Get-SubnetUtilization, Add-AuditIssue, Test-VNetProvisioningState, Test-CIDROverlap, Get-IPv6VNets, Invoke-ParallelIPOverlapCheck, Invoke-SequentialIPOverlapCheck, Test-IPAddressOverlaps, Test-VNetPeerings, Test-PrivateDNSZones, Test-VNetLinks, Test-PrivateEndpoints, Test-SubnetUtilization, Test-NetworkSecurityGroups, Test-RouteTables
+Export-ModuleMember -Function Test-IPAddressOverlap, Get-SubnetUtilization, Add-AuditIssue, Test-VNetProvisioningState, Test-CIDROverlap, Get-IPv6VNets, Invoke-ParallelIPOverlapCheck, Invoke-SequentialIPOverlapCheck, Test-IPAddressOverlaps, Test-VNetPeerings, Test-PrivateDNSZones, Test-VNetLinks, Test-PrivateEndpoints, Test-PrivateEndpointDNSMetadata, Test-IPInCIDR, Test-SubnetUtilization, Test-NetworkSecurityGroups, Get-NSGRiskScore, Get-NSGRecommendations, Test-RouteTables

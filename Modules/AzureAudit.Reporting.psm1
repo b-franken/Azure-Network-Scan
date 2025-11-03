@@ -204,6 +204,11 @@ $cssContent
                     <button class="filter-btn" data-severity="High">High</button>
                     <button class="filter-btn" data-severity="Medium">Medium</button>
                 </div>
+                <div class="action-buttons">
+                    <button class="action-btn" onclick="exportFilteredToCSV()">Export Filtered to CSV</button>
+                    <button class="action-btn secondary" onclick="groupBySubscription()">Group by Subscription</button>
+                    <button class="action-btn secondary" onclick="resetGrouping()">Reset Grouping</button>
+                </div>
                 <table id="issuesTable">
                     <thead>
                         <tr>
@@ -346,6 +351,113 @@ $cssContent
         });
 
         document.getElementById('issueSearch').addEventListener('input', renderIssues);
+
+        function getCurrentFilteredIssues() {
+            const searchTerm = document.getElementById('issueSearch').value.toLowerCase();
+            return issues.filter(issue => {
+                const matchesFilter = currentFilter === 'all' || issue.severity === currentFilter;
+                const matchesSearch = !searchTerm ||
+                    issue.title.toLowerCase().includes(searchTerm) ||
+                    issue.description.toLowerCase().includes(searchTerm) ||
+                    issue.resourceName.toLowerCase().includes(searchTerm);
+                return matchesFilter && matchesSearch;
+            });
+        }
+
+        function convertToCSV(data) {
+            if (data.length === 0) return '';
+
+            const headers = ['Severity', 'Category', 'Title', 'Resource Name', 'Description', 'Remediation'];
+            const csvRows = [headers.join(',')];
+
+            data.forEach(issue => {
+                const row = [
+                    issue.severity,
+                    issue.category,
+                    '"' + (issue.title || '').replace(/"/g, '""') + '"',
+                    '"' + (issue.resourceName || '').replace(/"/g, '""') + '"',
+                    '"' + (issue.description || '').replace(/"/g, '""') + '"',
+                    '"' + (issue.remediation || '').replace(/"/g, '""') + '"'
+                ];
+                csvRows.push(row.join(','));
+            });
+
+            return csvRows.join('\\n');
+        }
+
+        function downloadFile(content, filename, contentType) {
+            const blob = new Blob([content], { type: contentType });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        }
+
+        function exportFilteredToCSV() {
+            const filtered = getCurrentFilteredIssues();
+            if (filtered.length === 0) {
+                alert('No issues to export with current filters');
+                return;
+            }
+            const csv = convertToCSV(filtered);
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            downloadFile(csv, 'azure-audit-issues-' + timestamp + '.csv', 'text/csv');
+        }
+
+        let isGroupedBySubscription = false;
+
+        function groupBySubscription() {
+            isGroupedBySubscription = true;
+            const filtered = getCurrentFilteredIssues();
+
+            const grouped = {};
+            filtered.forEach(issue => {
+                const subId = issue.subscriptionId || 'Unknown';
+                if (!grouped[subId]) {
+                    grouped[subId] = [];
+                }
+                grouped[subId].push(issue);
+            });
+
+            const tbody = document.getElementById('issuesTableBody');
+            const fragment = document.createDocumentFragment();
+
+            const sortedSubs = Object.keys(grouped).sort();
+
+            sortedSubs.forEach(subId => {
+                const subIssues = grouped[subId];
+
+                const headerRow = document.createElement('tr');
+                headerRow.className = 'subscription-header';
+                const headerCell = document.createElement('td');
+                headerCell.colSpan = 5;
+                headerCell.innerHTML = '<strong>Subscription: ' + subId + '</strong> (' + subIssues.length + ' issues)';
+                headerRow.appendChild(headerCell);
+                fragment.appendChild(headerRow);
+
+                subIssues.forEach(issue => {
+                    const row = createTableRow([
+                        { text: issue.severity, badge: issue.severity.toLowerCase() },
+                        issue.category,
+                        issue.title,
+                        issue.resourceName,
+                        issue.description
+                    ]);
+                    fragment.appendChild(row);
+                });
+            });
+
+            tbody.replaceChildren(fragment);
+        }
+
+        function resetGrouping() {
+            isGroupedBySubscription = false;
+            renderIssues();
+        }
 
         renderIssues();
         renderVNets();
