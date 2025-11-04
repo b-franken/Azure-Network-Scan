@@ -131,14 +131,14 @@ function Export-CSVReports {
             ForEach-Object { $AuditResults.Issues[$_] } |
             Where-Object { $_ }
 
-        if ($allIssues.Count -gt 0) {
+        if (($allIssues.Count ?? 0) -gt 0) {
             $allIssuesPath = "${ReportBasePath}_AllIssues.csv"
             $allIssues | Export-Csv -Path $allIssuesPath -NoTypeInformation -Encoding UTF8 -ErrorAction Stop
             Write-AuditLog "Exported All Issues CSV: $allIssuesPath ($($allIssues.Count) issues)" -Type Debug
             $exportedFiles += $allIssuesPath
         }
 
-        if ($AuditResults.Issues.Critical.Count -gt 0) {
+        if (($AuditResults.Issues.Critical.Count ?? 0) -gt 0) {
             $criticalPath = "${ReportBasePath}_CriticalIssues.csv"
             $AuditResults.Issues.Critical | Export-Csv -Path $criticalPath -NoTypeInformation -Encoding UTF8 -ErrorAction Stop
             Write-AuditLog "Exported Critical Issues CSV: $criticalPath ($($AuditResults.Issues.Critical.Count) issues)" -Type Debug
@@ -150,7 +150,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.VirtualNetworkGateways.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('VirtualNetworkGateways') -and (($AuditResults.VirtualNetworkGateways.Count ?? 0) -gt 0)) {
             $vngwExport = $AuditResults.VirtualNetworkGateways | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -173,7 +173,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.Connections.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('Connections') -and (($AuditResults.Connections.Count ?? 0) -gt 0)) {
             $connExport = $AuditResults.Connections | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -195,7 +195,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.LocalNetworkGateways.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('LocalNetworkGateways') -and (($AuditResults.LocalNetworkGateways.Count ?? 0) -gt 0)) {
             $lngwExport = $AuditResults.LocalNetworkGateways | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -216,7 +216,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.NetworkInterfaces.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('NetworkInterfaces') -and (($AuditResults.NetworkInterfaces.Count ?? 0) -gt 0)) {
             $nicExport = $AuditResults.NetworkInterfaces | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -238,7 +238,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.VirtualHubs.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('VirtualHubs') -and (($AuditResults.VirtualHubs.Count ?? 0) -gt 0)) {
             $vhubExport = $AuditResults.VirtualHubs | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -259,7 +259,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.VirtualWANs.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('VirtualWANs') -and (($AuditResults.VirtualWANs.Count ?? 0) -gt 0)) {
             $vwanExport = $AuditResults.VirtualWANs | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -279,7 +279,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.FirewallPolicies.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('FirewallPolicies') -and (($AuditResults.FirewallPolicies.Count ?? 0) -gt 0)) {
             $fwpExport = $AuditResults.FirewallPolicies | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -299,7 +299,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.ApplicationSecurityGroups.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('ApplicationSecurityGroups') -and (($AuditResults.ApplicationSecurityGroups.Count ?? 0) -gt 0)) {
             $asgExport = $AuditResults.ApplicationSecurityGroups | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -317,7 +317,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.APIManagementServices.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('APIManagementServices') -and (($AuditResults.APIManagementServices.Count ?? 0) -gt 0)) {
             $apimExport = $AuditResults.APIManagementServices | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -342,7 +342,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.TrafficManagerProfiles.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('TrafficManagerProfiles') -and (($AuditResults.TrafficManagerProfiles.Count ?? 0) -gt 0)) {
             $tmExport = $AuditResults.TrafficManagerProfiles | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},
@@ -367,7 +367,7 @@ function Export-CSVReports {
     }
 
     try {
-        if (($AuditResults.FrontDoorProfiles.Count ?? 0) -gt 0) {
+        if ($AuditResults.ContainsKey('FrontDoorProfiles') -and (($AuditResults.FrontDoorProfiles.Count ?? 0) -gt 0)) {
             $fdExport = $AuditResults.FrontDoorProfiles | Select-Object @{N='Subscription';E={$_.subscriptionId}},
                 @{N='ResourceGroup';E={$_.resourceGroup}},
                 @{N='Name';E={$_.name}},

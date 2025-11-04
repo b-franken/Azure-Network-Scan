@@ -56,6 +56,7 @@ function Connect-AzureForAudit {
                 Write-AuditLog "Successfully authenticated with App Registration" -Type Success
                 Write-AuditLog "Tenant: $($context.Context.Tenant.Id)" -Type Info
                 Write-AuditLog "Account: $($context.Context.Account.Id)" -Type Info
+                return $context
             }
             else {
                 throw "Connection succeeded but no context was returned"
@@ -76,6 +77,7 @@ function Connect-AzureForAudit {
                 Write-AuditLog "Successfully authenticated interactively" -Type Success
                 Write-AuditLog "Tenant: $($context.Context.Tenant.Id)" -Type Info
                 Write-AuditLog "Account: $($context.Context.Account.Id)" -Type Info
+                return $context
             }
             else {
                 throw "Connection succeeded but no context was returned"
@@ -132,16 +134,17 @@ function Get-AuditSubscriptions {
             Write-AuditLog "Found $($subscriptions.Count) enabled subscriptions" -Type Info
         }
         else {
-            $subscriptions = @()
+            $subscriptionsList = [System.Collections.Generic.List[object]]::new()
             foreach ($subId in $SubscriptionIds) {
                 $sub = Get-AzSubscription -SubscriptionId $subId -ErrorAction Stop
                 if ($sub.State -eq 'Enabled') {
-                    $subscriptions += $sub
+                    $subscriptionsList.Add($sub)
                 }
                 else {
                     Write-AuditLog "Subscription $subId is in state '$($sub.State)' and will be skipped" -Type Warning
                 }
             }
+            $subscriptions = @($subscriptionsList.ToArray())
             Write-AuditLog "Validated $($subscriptions.Count) enabled subscriptions from provided list" -Type Info
         }
 

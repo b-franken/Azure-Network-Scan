@@ -2,8 +2,21 @@ audit-config.json
 
 *.log
 *.tmp
+*.temp
 
 AuditReports/
+Output/
+test-output/
+Tests/.test-output/
+Tests/coverage.xml
+Tests/test-results.xml
+
+AuditLog_*.log
+AzureNetworkAudit_*_Dashboard.html
+AzureNetworkAudit_*.csv
+*_Dashboard.html
 
 .DS_Store
 Thumbs.db
+*.swp
+*~

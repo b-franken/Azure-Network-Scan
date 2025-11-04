@@ -1875,21 +1875,7 @@ function Get-FrontDoorProfiles {
         [int]$PageSize = 1000
     )
 
-    $frontDoorQuery = @"
-Resources
-| where (type =~ 'microsoft.network/frontdoors') or
-        (type =~ 'microsoft.cdn/profiles' and (properties.sku.name =~ 'Standard_AzureFrontDoor' or properties.sku.name =~ 'Premium_AzureFrontDoor'))
-| extend sku = properties.sku.name
-| extend tier = properties.sku.tier
-| extend kind = iff(type =~ 'microsoft.cdn/profiles', 'frontdoor-premium-standard', 'frontdoor-classic')
-| extend frontendEndpoints = iff(type =~ 'microsoft.network/frontdoors', properties.frontendEndpoints, properties.customDomains)
-| extend backendPools = iff(type =~ 'microsoft.network/frontdoors', properties.backendPools, properties.originGroups)
-| extend routingRules = iff(type =~ 'microsoft.network/frontdoors', properties.routingRules, properties.routes)
-| extend wafPolicy = iff(type =~ 'microsoft.network/frontdoors', properties.webApplicationFirewallPolicyLink.id, properties.securityPolicyLink.id)
-| extend enabledState = iff(type =~ 'microsoft.network/frontdoors', properties.enabledState, properties.resourceState)
-| extend provisioningState = properties.provisioningState
-| project id, subscriptionId, resourceGroup, name, location, sku, tier, kind, frontendEndpoints, backendPools, routingRules, wafPolicy, enabledState, provisioningState, tags
-"@
+    $frontDoorQuery = "Resources | where (type =~ 'microsoft.network/frontdoors') or (type =~ 'microsoft.cdn/profiles' and (tostring(properties.sku.name) =~ 'Standard_AzureFrontDoor' or tostring(properties.sku.name) =~ 'Premium_AzureFrontDoor')) | extend sku = tostring(properties.sku.name) | extend tier = tostring(properties.sku.tier) | extend frontDoorType = iff(type =~ 'microsoft.cdn/profiles', 'frontdoor-premium-standard', 'frontdoor-classic') | extend enabledState = iff(type =~ 'microsoft.network/frontdoors', tostring(properties.enabledState), tostring(properties.resourceState)) | extend provisioningState = tostring(properties.provisioningState) | project id, subscriptionId, resourceGroup, name, location, type, sku, tier, frontDoorType, enabledState, provisioningState, properties, tags"
 
     return Invoke-AzResourceGraphWithPagination -Query $frontDoorQuery -SubscriptionIds $SubscriptionIds -QueryName "Front Door Profiles" -PageSize $PageSize
 }

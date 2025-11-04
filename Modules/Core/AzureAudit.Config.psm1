@@ -116,76 +116,76 @@ function Initialize-AuditConfig {
             }
         }
 
-        if ($configData.Logging) {
-            if ($configData.Logging.LogLevel) {
+        if ($configData.PSObject.Properties['Logging']) {
+            if ($configData.Logging.PSObject.Properties['LogLevel']) {
                 $script:AuditConfig.Logging.LogLevel = $configData.Logging.LogLevel
             }
-            if ($null -ne $configData.Logging.LogToFile) {
+            if ($configData.Logging.PSObject.Properties['LogToFile']) {
                 $script:AuditConfig.Logging.LogToFile = $configData.Logging.LogToFile
             }
-            if ($null -ne $configData.Logging.LogToConsole) {
+            if ($configData.Logging.PSObject.Properties['LogToConsole']) {
                 $script:AuditConfig.Logging.LogToConsole = $configData.Logging.LogToConsole
             }
         }
 
-        if ($configData.DataCollection) {
-            if ($configData.DataCollection.ResourceGraphPageSize) {
+        if ($configData.PSObject.Properties['DataCollection']) {
+            if ($configData.DataCollection.PSObject.Properties['ResourceGraphPageSize']) {
                 $script:AuditConfig.DataCollection.ResourceGraphPageSize = $configData.DataCollection.ResourceGraphPageSize
             }
-            if ($configData.DataCollection.MaxRetries) {
+            if ($configData.DataCollection.PSObject.Properties['MaxRetries']) {
                 $script:AuditConfig.DataCollection.MaxRetries = $configData.DataCollection.MaxRetries
             }
-            if ($configData.DataCollection.BaseDelaySeconds) {
+            if ($configData.DataCollection.PSObject.Properties['BaseDelaySeconds']) {
                 $script:AuditConfig.DataCollection.BaseDelaySeconds = $configData.DataCollection.BaseDelaySeconds
             }
         }
 
-        if ($configData.Analysis) {
-            if ($configData.Analysis.MaxConcurrentQueries) {
+        if ($configData.PSObject.Properties['Analysis']) {
+            if ($configData.Analysis.PSObject.Properties['MaxConcurrentQueries']) {
                 $script:AuditConfig.Analysis.MaxConcurrentQueries = $configData.Analysis.MaxConcurrentQueries
             }
-            if ($configData.Analysis.ParallelProcessingThreshold) {
+            if ($configData.Analysis.PSObject.Properties['ParallelProcessingThreshold']) {
                 $script:AuditConfig.Analysis.ParallelProcessingThreshold = $configData.Analysis.ParallelProcessingThreshold
             }
         }
 
-        if ($configData.Reporting) {
-            if ($configData.Reporting.OutputPath) {
+        if ($configData.PSObject.Properties['Reporting']) {
+            if ($configData.Reporting.PSObject.Properties['OutputPath']) {
                 $script:AuditConfig.Reporting.OutputPath = $configData.Reporting.OutputPath
             }
-            if ($null -ne $configData.Reporting.SkipHTMLReport) {
+            if ($configData.Reporting.PSObject.Properties['SkipHTMLReport']) {
                 $script:AuditConfig.Reporting.SkipHTMLReport = $configData.Reporting.SkipHTMLReport
             }
-            if ($null -ne $configData.Reporting.IncludeTimestamp) {
+            if ($configData.Reporting.PSObject.Properties['IncludeTimestamp']) {
                 $script:AuditConfig.Reporting.IncludeTimestamp = $configData.Reporting.IncludeTimestamp
             }
-            if ($configData.Reporting.Visualization) {
-                if ($null -ne $configData.Reporting.Visualization.EnableNetworkGraphs) {
+            if ($configData.Reporting.PSObject.Properties['Visualization']) {
+                if ($configData.Reporting.Visualization.PSObject.Properties['EnableNetworkGraphs']) {
                     $script:AuditConfig.Reporting.Visualization.EnableNetworkGraphs = $configData.Reporting.Visualization.EnableNetworkGraphs
                 }
-                if ($configData.Reporting.Visualization.Formats) {
+                if ($configData.Reporting.Visualization.PSObject.Properties['Formats']) {
                     $script:AuditConfig.Reporting.Visualization.Formats = $configData.Reporting.Visualization.Formats
                 }
-                if ($configData.Reporting.Visualization.GraphvizPath) {
+                if ($configData.Reporting.Visualization.PSObject.Properties['GraphvizPath']) {
                     $script:AuditConfig.Reporting.Visualization.GraphvizPath = $configData.Reporting.Visualization.GraphvizPath
                 }
-                if ($null -ne $configData.Reporting.Visualization.IncludeTimestamp) {
+                if ($configData.Reporting.Visualization.PSObject.Properties['IncludeTimestamp']) {
                     $script:AuditConfig.Reporting.Visualization.IncludeTimestamp = $configData.Reporting.Visualization.IncludeTimestamp
                 }
-                if ($null -ne $configData.Reporting.Visualization.HighlightIssues) {
+                if ($configData.Reporting.Visualization.PSObject.Properties['HighlightIssues']) {
                     $script:AuditConfig.Reporting.Visualization.HighlightIssues = $configData.Reporting.Visualization.HighlightIssues
                 }
-                if ($configData.Reporting.Visualization.ColorScheme) {
+                if ($configData.Reporting.Visualization.PSObject.Properties['ColorScheme']) {
                     $script:AuditConfig.Reporting.Visualization.ColorScheme = $configData.Reporting.Visualization.ColorScheme
                 }
-                if ($null -ne $configData.Reporting.Visualization.GroupBySubscription) {
+                if ($configData.Reporting.Visualization.PSObject.Properties['GroupBySubscription']) {
                     $script:AuditConfig.Reporting.Visualization.GroupBySubscription = $configData.Reporting.Visualization.GroupBySubscription
                 }
             }
         }
 
-        if ($configData.Subscriptions) {
-            if ($configData.Subscriptions.SubscriptionIds) {
+        if ($configData.PSObject.Properties['Subscriptions']) {
+            if ($configData.Subscriptions.PSObject.Properties['SubscriptionIds']) {
                 $script:AuditConfig.Subscriptions.SubscriptionIds = $configData.Subscriptions.SubscriptionIds
             }
         }

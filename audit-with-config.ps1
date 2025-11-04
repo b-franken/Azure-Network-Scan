@@ -98,8 +98,10 @@ catch {
 $config = Get-AuditConfig
 
 $outputPath = $config.Reporting.OutputPath
-if (!(Test-Path $outputPath)) {
-    New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
+if ($PSCmdlet.ShouldProcess($outputPath, "Create output directory")) {
+    if (!(Test-Path $outputPath)) {
+        New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
+    }
 }
 
 $script:LogFilePath = Join-Path $outputPath "AuditLog_$script:Timestamp.log"
@@ -532,7 +534,7 @@ if ($config.Reporting.SkipHTMLReport) {
     $reportParams.SkipHTML = $true
 }
 
-$reportFiles = New-AuditReport @reportParams
+$reportFiles = New-AuditReport @reportParams -WhatIf:$WhatIfPreference -Confirm:$false
 
 $script:AuditResults.Statistics.ExecutionTimeSeconds = [Math]::Round(((Get-Date) - $script:StartTime).TotalSeconds, 2)
 
@@ -589,12 +591,14 @@ if (($reportFiles.HTMLFiles.Count ?? 0) -gt 0) {
     $dashboardPath = $reportFiles.HTMLFiles[0]
     Write-Information "  - Interactive Dashboard: $dashboardPath" -Tags @("Success")
 
-    try {
-        Start-Process $dashboardPath
-        Write-AuditLog "Interactive dashboard opened in browser" -Type Success
-    }
-    catch {
-        Write-AuditLog "Could not auto-open dashboard. Please open manually: $dashboardPath" -Type Info
+    if ($PSCmdlet.ShouldProcess($dashboardPath, "Open in browser")) {
+        try {
+            Start-Process $dashboardPath
+            Write-AuditLog "Interactive dashboard opened in browser" -Type Success
+        }
+        catch {
+            Write-AuditLog "Could not auto-open dashboard. Please open manually: $dashboardPath" -Type Info
+        }
     }
 }
 

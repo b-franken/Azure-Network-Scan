@@ -150,15 +150,22 @@ function New-AuditReport {
             $jsonData = ConvertTo-DashboardJSON -AuditResults $AuditResults
             $cssContent = Get-DashboardCSS
 
+            $nonceBytes = New-Object byte[] 32
+            [System.Security.Cryptography.RandomNumberGenerator]::Fill($nonceBytes)
+            $nonce = [Convert]::ToBase64String($nonceBytes)
+
+            $totalVNets = if ($AuditResults.ContainsKey('Statistics')) { $AuditResults.Statistics.TotalVNets ?? 0 } else { 0 }
+            $totalDNSZones = if ($AuditResults.ContainsKey('Statistics')) { $AuditResults.Statistics.TotalPrivateDNSZones ?? 0 } else { 0 }
+
             $html = @"
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'nonce-$nonce'; style-src 'nonce-$nonce'; img-src 'self' data:; object-src 'none'; base-uri 'self';">
     <title>Azure Network Audit Dashboard</title>
-    <style>
+    <style nonce="$nonce">
 $cssContent
     </style>
 </head>
@@ -183,11 +190,11 @@ $cssContent
                 <div class="label">Medium Issues</div>
             </div>
             <div class="stat-card success">
-                <div class="number">$($AuditResults.Statistics.TotalVNets ?? 0)</div>
+                <div class="number">$totalVNets</div>
                 <div class="label">Virtual Networks</div>
             </div>
             <div class="stat-card info">
-                <div class="number">$($AuditResults.Statistics.TotalPrivateDNSZones ?? 0)</div>
+                <div class="number">$totalDNSZones</div>
                 <div class="label">DNS Zones</div>
             </div>
         </div>
@@ -205,9 +212,9 @@ $cssContent
                     <button class="filter-btn" data-severity="Medium">Medium</button>
                 </div>
                 <div class="action-buttons">
-                    <button class="action-btn" onclick="exportFilteredToCSV()">Export Filtered to CSV</button>
-                    <button class="action-btn secondary" onclick="groupBySubscription()">Group by Subscription</button>
-                    <button class="action-btn secondary" onclick="resetGrouping()">Reset Grouping</button>
+                    <button class="action-btn" id="exportBtn">Export Filtered to CSV</button>
+                    <button class="action-btn secondary" id="groupBtn">Group by Subscription</button>
+                    <button class="action-btn secondary" id="resetBtn">Reset Grouping</button>
                 </div>
                 <table id="issuesTable">
                     <thead>
@@ -258,10 +265,20 @@ $cssContent
         </div>
     </div>
 
-    <script>
-        const issues = $($jsonData.IssuesJson);
-        const vnets = $($jsonData.VNetsJson);
-        const dnsZones = $($jsonData.DNSZonesJson);
+    <script type="application/json" id="issues-data">
+$($jsonData.IssuesJson)
+    </script>
+    <script type="application/json" id="vnets-data">
+$($jsonData.VNetsJson)
+    </script>
+    <script type="application/json" id="dns-data">
+$($jsonData.DNSZonesJson)
+    </script>
+
+    <script nonce="$nonce">
+        const issues = JSON.parse(document.getElementById('issues-data').textContent);
+        const vnets = JSON.parse(document.getElementById('vnets-data').textContent);
+        const dnsZones = JSON.parse(document.getElementById('dns-data').textContent);
 
         let currentFilter = 'all';
 
@@ -351,6 +368,10 @@ $cssContent
         });
 
         document.getElementById('issueSearch').addEventListener('input', renderIssues);
+
+        document.getElementById('exportBtn').addEventListener('click', exportFilteredToCSV);
+        document.getElementById('groupBtn').addEventListener('click', groupBySubscription);
+        document.getElementById('resetBtn').addEventListener('click', resetGrouping);
 
         function getCurrentFilteredIssues() {
             const searchTerm = document.getElementById('issueSearch').value.toLowerCase();
@@ -475,6 +496,8 @@ $cssContent
     }
 
     Write-AuditLog "Report generation complete" -Type Success
+    $reportFiles.CSVFiles = @($reportFiles.CSVFiles)
+    $reportFiles.HTMLFiles = @($reportFiles.HTMLFiles)
     return $reportFiles
 }
 

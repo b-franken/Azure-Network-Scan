@@ -397,18 +397,22 @@ function ConvertTo-DashboardJSON {
     )
 
     $issuesByCategory = @{}
-    foreach ($severity in @("Critical", "High", "Medium", "Low", "Info")) {
-        foreach ($issue in $AuditResults.Issues[$severity]) {
-            if (!$issuesByCategory.ContainsKey($issue.Category)) {
-                $issuesByCategory[$issue.Category] = @{
-                    Critical = 0
-                    High = 0
-                    Medium = 0
-                    Low = 0
-                    Info = 0
+    if ($AuditResults.ContainsKey('Issues')) {
+        foreach ($severity in @("Critical", "High", "Medium", "Low", "Info")) {
+            if ($AuditResults.Issues.ContainsKey($severity)) {
+                foreach ($issue in $AuditResults.Issues[$severity]) {
+                    if (!$issuesByCategory.ContainsKey($issue.Category)) {
+                        $issuesByCategory[$issue.Category] = @{
+                            Critical = 0
+                            High = 0
+                            Medium = 0
+                            Low = 0
+                            Info = 0
+                        }
+                    }
+                    $issuesByCategory[$issue.Category][$severity]++
                 }
             }
-            $issuesByCategory[$issue.Category][$severity]++
         }
     }
 
@@ -421,46 +425,60 @@ function ConvertTo-DashboardJSON {
         $categoryChartData += $total
     }
 
-    $allIssuesJson = @("Critical", "High", "Medium", "Low", "Info") | ForEach-Object {
-        $severity = $_
-        $AuditResults.Issues[$severity] | ForEach-Object {
-            @{
-                timestamp = ($_.Timestamp -as [string])
-                severity = $severity
-                category = $_.Category
-                title = $_.Title
-                description = $_.Description
-                resourceName = $_.ResourceName
-                resourceType = $_.ResourceType
-                subscriptionId = $_.SubscriptionId
-                remediation = $_.Remediation
+    $allIssuesJson = if ($AuditResults.ContainsKey('Issues')) {
+        @("Critical", "High", "Medium", "Low", "Info") | ForEach-Object {
+            $severity = $_
+            if ($AuditResults.Issues.ContainsKey($severity)) {
+                $AuditResults.Issues[$severity] | ForEach-Object {
+                    @{
+                        timestamp = ($_.Timestamp -as [string])
+                        severity = $severity
+                        category = $_.Category
+                        title = $_.Title
+                        description = $_.Description
+                        resourceName = $_.ResourceName
+                        resourceType = $_.ResourceType
+                        subscriptionId = $_.SubscriptionId
+                        remediation = $_.Remediation
+                    }
+                }
             }
         }
+    } else {
+        @()
     }
 
-    $vnetsJsonArray = $AuditResults.VNets | ForEach-Object {
-        @{
-            subscription = $_.subscriptionId
-            resourceGroup = $_.resourceGroup
-            name = $_.name
-            location = $_.location
-            addressSpace = ($_.addressSpace -join ', ')
-            subnetCount = $_.subnets ? @($_.subnets).Count : 0
-            peeringCount = $_.peerings ? @($_.peerings).Count : 0
-            provisioningState = $_.provisioningState
+    $vnetsJsonArray = if ($AuditResults.ContainsKey('VNets') -and $AuditResults.VNets) {
+        $AuditResults.VNets | ForEach-Object {
+            @{
+                subscription = $_.subscriptionId
+                resourceGroup = $_.resourceGroup
+                name = $_.name
+                location = $_.location
+                addressSpace = ($_.addressSpace -join ', ')
+                subnetCount = $_.subnets ? @($_.subnets).Count : 0
+                peeringCount = $_.peerings ? @($_.peerings).Count : 0
+                provisioningState = $_.provisioningState
+            }
         }
+    } else {
+        @()
     }
 
-    $dnsZonesJsonArray = $AuditResults.PrivateDNSZones | ForEach-Object {
-        @{
-            subscription = $_.subscriptionId
-            resourceGroup = $_.resourceGroup
-            name = $_.name
-            recordSets = $_.numberOfRecordSets
-            vnetLinks = $_.numberOfVirtualNetworkLinks
-            linksWithRegistration = $_.numberOfVirtualNetworkLinksWithRegistration
-            provisioningState = $_.provisioningState
+    $dnsZonesJsonArray = if ($AuditResults.ContainsKey('PrivateDNSZones') -and $AuditResults.PrivateDNSZones) {
+        $AuditResults.PrivateDNSZones | ForEach-Object {
+            @{
+                subscription = $_.subscriptionId
+                resourceGroup = $_.resourceGroup
+                name = $_.name
+                recordSets = $_.numberOfRecordSets
+                vnetLinks = $_.numberOfVirtualNetworkLinks
+                linksWithRegistration = $_.numberOfVirtualNetworkLinksWithRegistration
+                provisioningState = $_.provisioningState
+            }
         }
+    } else {
+        @()
     }
 
     return @{
